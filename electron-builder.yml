@@ -1,0 +1,40 @@
+appId: com.softwareinc.escuela
+productName: Software Inc
+directories:
+  output: dist
+  buildResources: resources
+files:
+  - out/**/*
+  - package.json
+asar: true
+# El binario nativo de better-sqlite3 debe quedar desempaquetado del asar
+asarUnpack:
+  - "**/node_modules/better-sqlite3/**"
+  - "**/node_modules/sharp/**"
+  - "**/*.node"
+# Las migraciones SQL viajan como recurso (resolveMigrationsDir las busca en process.resourcesPath)
+extraResources:
+  - from: src/main/db/migrations
+    to: migrations
+    filter:
+      - "**/*.sql"
+win:
+  target:
+    - target: nsis
+      arch:
+        - x64
+  # Nombre FIJO (sin versión) => link de descarga permanente:
+  #   https://github.com/<usuario>/<repo>/releases/latest/download/Software-Inc-Setup.exe
+  artifactName: Software-Inc-Setup.${ext}
+# Publicación automática en GitHub Releases (owner/repo se detecta del remoto en CI)
+publish:
+  provider: github
+  releaseType: release
+nsis:
+  oneClick: false
+  perMachine: false
+  allowToChangeInstallationDirectory: true
+  createDesktopShortcut: true
+  createStartMenuShortcut: true
+  shortcutName: Software Inc
+# Sin auto-update: es una app local mono-puesto.

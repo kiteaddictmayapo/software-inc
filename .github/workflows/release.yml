@@ -1,0 +1,37 @@
+name: Release Windows Installer
+
+# Al hacer push de un tag v* (p.ej. v0.1.0), compila el .exe en Windows y lo publica
+# en GitHub Releases. El cliente lo descarga desde la página de Releases.
+on:
+  push:
+    tags:
+      - 'v*'
+
+permissions:
+  contents: write # necesario para crear el Release y subir el .exe
+
+jobs:
+  build-windows:
+    runs-on: windows-latest
+    steps:
+      - name: Checkout
+        uses: actions/checkout@v4
+
+      - name: Setup Node.js
+        uses: actions/setup-node@v4
+        with:
+          node-version: 20
+          cache: npm
+
+      - name: Instalar dependencias (recompila módulos nativos para Electron)
+        run: npm ci
+
+      - name: Verificar (typecheck + tests)
+        run: |
+          npm run typecheck
+          npm test
+
+      - name: Compilar y publicar instalador en Releases
+        env:
+          GH_TOKEN: ${{ secrets.GITHUB_TOKEN }}
+        run: npm run release:win

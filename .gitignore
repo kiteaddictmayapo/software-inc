@@ -1,0 +1,32 @@
+# Dependencias y artefactos de build
+node_modules/
+out/
+dist/
+demo-dist/
+*.log
+
+# Datos locales de la app (NUNCA se suben: contienen información de clientes)
+*.db
+*.db-wal
+*.db-shm
+media/
+backups/
+exports/
+
+# El Excel original y cualquier planilla con datos reales (PII)
+*.xlsx
+*.xls
+*.csv
+
+# Secretos / configuración local
+.env
+.env.*
+!.env.example
+
+# Carpeta privada: pon aquí lo que NO debe subirse (copia del Excel, certificados, notas)
+private/*
+!private/.gitkeep
+
+# Sistema
+.DS_Store
+Thumbs.db

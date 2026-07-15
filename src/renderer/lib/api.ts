@@ -1,0 +1,59 @@
+import { useCallback, useEffect, useState } from 'react'
+import type { AppApi } from '@shared/types/api'
+import { mockApi } from './mockApi'
+
+/** En MODO DEMO (build de navegador) se usa el API simulado; si no, el IPC real de Electron. */
+export const IS_DEMO: boolean = !!(import.meta as any).env?.VITE_DEMO
+export const api: AppApi = IS_DEMO ? mockApi : window.api
+
+export function formatCOP(value: number | null | undefined): string {
+  if (value == null || !isFinite(value)) return '—'
+  return '$ ' + Math.round(value).toLocaleString('es-CO', { maximumFractionDigits: 0 })
+}
+
+export function minutesToHHMM(min: number | null | undefined): string {
+  if (min == null) return ''
+  const h = Math.floor(min / 60)
+  const m = min % 60
+  return `${String(h).padStart(2, '0')}:${String(m).padStart(2, '0')}`
+}
+
+export function hhmmToMinutes(s: string): number | null {
+  const m = /^(\d{1,2}):(\d{2})$/.exec(s.trim())
+  if (!m) return null
+  return parseInt(m[1], 10) * 60 + parseInt(m[2], 10)
+}
+
+/** Hook simple para cargar datos asíncronos con recarga. */
+export function useAsync<T>(fn: () => Promise<T>, deps: unknown[] = []): {
+  data: T | null
+  loading: boolean
+  error: string | null
+  reload: () => void
+} {
+  const [data, setData] = useState<T | null>(null)
+  const [loading, setLoading] = useState(true)
+  const [error, setError] = useState<string | null>(null)
+  const [tick, setTick] = useState(0)
+  const memo = useCallback(fn, deps)
+
+  useEffect(() => {
+    let alive = true
+    setLoading(true)
+    setError(null)
+    memo()
+      .then((d) => alive && setData(d))
+      .catch((e) => alive && setError(e?.message ?? String(e)))
+      .finally(() => alive && setLoading(false))
+    return () => {
+      alive = false
+    }
+    // eslint-disable-next-line react-hooks/exhaustive-deps
+  }, [memo, tick])
+
+  return { data, loading, error, reload: () => setTick((t) => t + 1) }
+}
+
+export function todayISO(): string {
+  return new Date().toISOString().slice(0, 10)
+}
