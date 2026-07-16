@@ -326,11 +326,11 @@ export function Transacciones() {
         />
       )}
 
-      {/* Alta de clase con contador */}
+      {/* Alta de clase con contador — solo personas ACTIVAS (los inactivos no dan más clases) */}
       {addingClass && (
         <NuevaClaseModal
-          clients={clients.map((c) => ({ id: c.id, label: c.fullName }))}
-          professors={professors.map((p) => ({ id: p.id, label: p.nickname || p.fullName }))}
+          clients={clients.filter((c) => c.stillHere !== false).map((c) => ({ id: c.id, label: c.fullName }))}
+          professors={professors.filter((p) => p.stillHere !== false).map((p) => ({ id: p.id, label: p.nickname || p.fullName }))}
           serviceOpts={serviceOpts}
           onClose={() => setAddingClass(false)}
           onStarted={() => { setAddingClass(false); reload() }}

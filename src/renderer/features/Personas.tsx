@@ -114,9 +114,13 @@ function NewPersonModal({ role, onClose, onCreated }: { role: Role; onClose: () 
 export function Personas() {
   const [role, setRole] = useState<Role>('client')
   const [search, setSearch] = useState('')
+  const [onlyActive, setOnlyActive] = useState(false)
   const [profileId, setProfileId] = useState<number | null>(null)
   const [adding, setAdding] = useState(false)
-  const { data, loading, reload } = useAsync(() => api.persons.list({ role, search, limit: 1000 }), [role, search])
+  const { data, loading, reload } = useAsync(
+    () => api.persons.list({ role, search, onlyActive: onlyActive || undefined, limit: 1000 }),
+    [role, search, onlyActive]
+  )
 
   async function onUpdate(id: number, patch: any) {
     const row = data?.find((p) => p.id === id)
@@ -134,7 +138,20 @@ export function Personas() {
     try {
       await api.persons.remove(id)
     } catch (e: any) {
-      alert(e?.message ?? 'No se pudo eliminar.')
+      const msg = e?.message ?? 'No se pudo eliminar.'
+      // Con historial no se puede borrar: ofrecer marcarla inactiva con un clic.
+      if (String(msg).includes('registro(s) asociados')) {
+        const row = data?.find((p) => p.id === id)
+        if (row && confirm(`${msg}\n\n¿Quieres marcarla como INACTIVA ahora? (desaparece de los selectores de clases)`)) {
+          try {
+            await api.persons.update(id, toPersonInput({ ...row, stillHere: false }) as any)
+          } catch (e2: any) {
+            alert(e2?.message ?? 'No se pudo marcar inactiva.')
+          }
+        }
+      } else {
+        alert(msg)
+      }
     }
     reload()
   }
@@ -173,6 +190,13 @@ export function Personas() {
           <button className={`btn sm ${role === 'supplier' ? 'primary' : ''}`} onClick={() => setRole('supplier')}>Proveedores</button>
         </div>
         <input className="grow" placeholder="Buscar por nombre o email…" value={search} onChange={(e) => setSearch(e.target.value)} />
+        <button
+          className={`btn sm ${onlyActive ? 'primary' : ''}`}
+          onClick={() => setOnlyActive((v) => !v)}
+          title="Ocultar las personas marcadas como inactivas"
+        >
+          {onlyActive ? '✓ Solo activos' : 'Solo activos'}
+        </button>
       </div>
 
       {loading ? (
