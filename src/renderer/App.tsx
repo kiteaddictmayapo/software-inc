@@ -9,6 +9,7 @@ import { Dashboard } from './features/Dashboard'
 import { Personas } from './features/Personas'
 import { Catalogo } from './features/Catalogo'
 import { Transacciones } from './features/Transacciones'
+import { Calendario } from './features/Calendario'
 import { Bar } from './features/Bar'
 import { Gastos } from './features/Gastos'
 import { Facturacion } from './features/Facturacion'
@@ -27,6 +28,7 @@ const NAV = [
   { to: '/personas', label: 'Personas' },
   { to: '/catalogo', label: 'Catálogo' },
   { to: '/transacciones', label: 'Club' },
+  { to: '/calendario', label: 'Calendario' },
   { to: '/bar', label: 'Bar' },
   { to: '/gastos', label: 'Gastos' },
   { to: '/reservas-web', label: 'Reservas Web' },
@@ -40,6 +42,7 @@ const NAV = [
 export default function App() {
   const [phase, setPhase] = useState<Phase>(IS_DEMO ? 'ready' : 'loading')
   const [status, setStatus] = useState<AppStatus | null>(null)
+  const [menuOpen, setMenuOpen] = useState(false) // cajón de navegación en móvil
 
   async function refresh() {
     const s = await api.auth.status()
@@ -76,15 +79,28 @@ export default function App() {
 
   return (
     <div className="app">
-      <nav className="sidebar">
+      {/* Barra superior SOLO móvil: hamburguesa + logo (el sidebar se vuelve cajón) */}
+      <div className="topbar">
+        <button className="hamburger" aria-label="Menú" onClick={() => setMenuOpen(true)}>☰</button>
+        <div className="topbar-logo"><Logo height={30} onDark /></div>
+        <span style={{ width: 40 }} />
+      </div>
+      {menuOpen && <div className="drawer-backdrop" onClick={() => setMenuOpen(false)} />}
+      <nav className={'sidebar' + (menuOpen ? ' open' : '')}>
         {IS_DEMO && <div className="demo-banner">MODO DEMO · datos de ejemplo</div>}
         {NAV.map((n) => (
-          <NavLink key={n.to} to={n.to} end={n.end} className={({ isActive }) => (isActive ? 'active' : '')}>
+          <NavLink
+            key={n.to}
+            to={n.to}
+            end={n.end}
+            className={({ isActive }) => (isActive ? 'active' : '')}
+            onClick={() => setMenuOpen(false)}
+          >
             {n.label}
           </NavLink>
         ))}
         <div className="spacer" />
-        <NavLink to="/archivos" className={({ isActive }) => (isActive ? 'active' : '')}>
+        <NavLink to="/archivos" className={({ isActive }) => (isActive ? 'active' : '')} onClick={() => setMenuOpen(false)}>
           Archivos
         </NavLink>
         <div className="muted" style={{ fontSize: 11, padding: '8px 10px' }}>
@@ -92,13 +108,14 @@ export default function App() {
         </div>
       </nav>
       <main className="main">
-        {/* Logo centrado arriba del contenido (el sidebar sigue negro) */}
+        {/* Logo centrado arriba del contenido (el sidebar sigue negro; en móvil va en la topbar) */}
         <div className="main-brand"><Logo height={46} /></div>
         <Routes>
           <Route path="/" element={<Dashboard />} />
           <Route path="/personas" element={<Personas />} />
           <Route path="/catalogo" element={<Catalogo />} />
           <Route path="/transacciones" element={<Transacciones />} />
+          <Route path="/calendario" element={<Calendario />} />
           <Route path="/bar" element={<Bar />} />
           <Route path="/gastos" element={<Gastos />} />
           <Route path="/reservas-web" element={<ReservasWeb />} />
