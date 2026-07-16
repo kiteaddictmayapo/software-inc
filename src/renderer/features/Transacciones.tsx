@@ -1,14 +1,15 @@
-import React, { useState } from 'react'
-import { api, useAsync, formatCOP, minutesToHHMM, todayISO } from '../lib/api'
-import { Spinner, Empty, Avatar } from '../components/ui'
+import React, { useEffect, useReducer, useState } from 'react'
+import { api, useAsync, formatCOP, minutesToHHMM, hhmmToMinutes, todayISO } from '../lib/api'
+import { Spinner, Empty, Avatar, Field, Modal } from '../components/ui'
 import { PersonAvatar } from '../components/PersonAvatar'
 import { EditableTable, GridColumn } from '../components/EditableTable'
 import type { Transaction } from '@shared/types/domain'
 
 const CLASS = '__class__'
+// El tipo 'loan' se muestra SIEMPRE como "Alquiler" (nunca "préstamo").
 const TYPE_OPTS = [
   { value: 'class', label: 'Clase' },
-  { value: 'loan', label: 'Préstamo' },
+  { value: 'loan', label: 'Alquiler' },
   { value: 'service', label: 'Servicio' },
   { value: 'other', label: 'Otro' }
 ]
@@ -19,12 +20,161 @@ function nowMin(): number {
 }
 const numOrNull = (v: any) => (v === '' || v == null ? null : Number(v))
 
+function fmtDur(min: number): string {
+  const h = Math.floor(min / 60)
+  const m = min % 60
+  return h > 0 ? `${h} h ${m} min` : `${m} min`
+}
+
+/** Alta de clase con contador: al pulsar "Empezar clase" queda abierta y el tiempo corre. */
+function NuevaClaseModal({ clients, professors, serviceOpts, onClose, onStarted }: {
+  clients: { id: number; label: string }[]
+  professors: { id: number; label: string }[]
+  serviceOpts: { value: string; label: string }[]
+  onClose: () => void
+  onStarted: () => void
+}) {
+  const [form, setForm] = useState<any>({ clientId: '', serviceSel: CLASS, professorId: '', start: minutesToHHMM(nowMin()) })
+  const [busy, setBusy] = useState(false)
+  const [err, setErr] = useState<string | null>(null)
+
+  async function empezar() {
+    if (!form.clientId || !form.serviceSel) {
+      setErr('Elige el cliente y el servicio/clase.')
+      return
+    }
+    setBusy(true)
+    setErr(null)
+    try {
+      const isClass = form.serviceSel === CLASS
+      await api.transactions.create({
+        txDate: todayISO(),
+        startMin: form.start ? hhmmToMinutes(form.start) : nowMin(), // hora de inicio modificable
+        endMin: null, // abierta: el contador corre hasta "Terminar"
+        serviceId: isClass ? null : Number(form.serviceSel),
+        isClass,
+        txType: isClass ? 'class' : 'service',
+        clientId: Number(form.clientId),
+        professorId: form.professorId ? Number(form.professorId) : null,
+        kiteId: null,
+        boardId: null,
+        priceOverride: null,
+        comment: null
+      })
+      onStarted()
+    } catch (e: any) {
+      setErr(e?.message ?? String(e))
+    } finally {
+      setBusy(false)
+    }
+  }
+
+  return (
+    <Modal
+      title="Añadir clase"
+      onClose={onClose}
+      footer={
+        <>
+          <button className="btn" onClick={onClose} disabled={busy}>Cancelar</button>
+          <button className="btn primary" onClick={empezar} disabled={busy || !form.clientId || !form.serviceSel}>
+            {busy ? 'Empezando…' : '▶ Empezar clase'}
+          </button>
+        </>
+      }
+    >
+      <div className="row2">
+        <Field label="Cliente *">
+          <select autoFocus value={form.clientId} onChange={(e) => setForm((f: any) => ({ ...f, clientId: e.target.value }))}>
+            <option value="">— Selecciona —</option>
+            {clients.map((c) => <option key={c.id} value={c.id}>{c.label}</option>)}
+          </select>
+        </Field>
+        <Field label="Servicio / Clase *">
+          <select value={form.serviceSel} onChange={(e) => setForm((f: any) => ({ ...f, serviceSel: e.target.value }))}>
+            {serviceOpts.filter((o) => o.value !== '').map((o) => <option key={o.value} value={o.value}>{o.label}</option>)}
+          </select>
+        </Field>
+      </div>
+      <div className="row2">
+        <Field label="Profesor">
+          <select value={form.professorId} onChange={(e) => setForm((f: any) => ({ ...f, professorId: e.target.value }))}>
+            <option value="">—</option>
+            {professors.map((p) => <option key={p.id} value={p.id}>{p.label}</option>)}
+          </select>
+        </Field>
+        <Field label="Hora de inicio (modificable)">
+          <input type="time" value={form.start} onChange={(e) => setForm((f: any) => ({ ...f, start: e.target.value }))} />
+        </Field>
+      </div>
+      <p className="muted" style={{ fontSize: 12 }}>
+        Al pulsar «Empezar clase» el contador queda en marcha. Cuando termine, pulsa
+        «⏹ Terminar» en la tarjeta de la clase: el contador se detiene y se muestra el
+        precio a pagar del cliente.
+      </p>
+      {err && <div className="err">{err}</div>}
+    </Modal>
+  )
+}
+
+/** Tarjetas de clases EN CURSO: contador vivo, hora de inicio editable y botón Terminar. */
+function ClasesEnCurso({ open, nameOf, svcName, onEditStart, onTerminar }: {
+  open: Transaction[]
+  nameOf: (id: number | null) => string
+  svcName: (t: Transaction) => string
+  onEditStart: (t: Transaction, startMin: number | null) => void
+  onTerminar: (t: Transaction) => void
+}) {
+  // Tic cada 30 s para que el contador avance (el cómputo usa la hora real).
+  const [, tick] = useReducer((x: number) => x + 1, 0)
+  useEffect(() => {
+    const i = setInterval(tick, 30_000)
+    return () => clearInterval(i)
+  }, [])
+  if (!open.length) return null
+  return (
+    <div className="grid" style={{ gridTemplateColumns: 'repeat(auto-fill, minmax(280px, 1fr))', marginBottom: 16 }}>
+      {open.map((t) => {
+        const elapsed = t.startMin != null ? Math.max(0, nowMin() - t.startMin) : null
+        return (
+          <div className="panel panel-p" key={t.id} style={{ borderLeft: '4px solid var(--accent)' }}>
+            <div style={{ display: 'flex', justifyContent: 'space-between', alignItems: 'start', gap: 8 }}>
+              <div>
+                <strong>{nameOf(t.clientId)}</strong>
+                <div className="muted" style={{ fontSize: 12 }}>{svcName(t)}{t.professorId != null ? ` · ${nameOf(t.professorId)}` : ''}</div>
+              </div>
+              <span className="badge open">EN CURSO</span>
+            </div>
+            <div style={{ display: 'flex', alignItems: 'center', gap: 10, marginTop: 12 }}>
+              <label className="muted" style={{ fontSize: 12 }}>Inicio</label>
+              <input
+                type="time"
+                style={{ width: 110 }}
+                value={t.startMin != null ? minutesToHHMM(t.startMin) : ''}
+                onChange={(e) => onEditStart(t, e.target.value ? hhmmToMinutes(e.target.value) : null)}
+                title="Hora de inicio (modificable)"
+              />
+              <div style={{ flex: 1, textAlign: 'right', fontVariantNumeric: 'tabular-nums' }}>
+                <span style={{ fontSize: 20, fontWeight: 800 }}>{elapsed != null ? fmtDur(elapsed) : '—'}</span>
+              </div>
+            </div>
+            <button className="btn primary" style={{ width: '100%', marginTop: 12 }} onClick={() => onTerminar(t)}>
+              ⏹ Terminar — calcular precio
+            </button>
+          </div>
+        )
+      })}
+    </div>
+  )
+}
+
 export function Transacciones() {
   const { data, loading, reload } = useAsync(() => api.transactions.list({ limit: 500 }), [])
   const persons = useAsync(() => api.persons.list({ limit: 2000 }), [])
   const services = useAsync(() => api.catalog.listServices(true), [])
   const equipment = useAsync(() => api.catalog.listEquipment(true), [])
   const [grouped, setGrouped] = useState(false)
+  const [addingClass, setAddingClass] = useState(false)
+  const [finished, setFinished] = useState<Transaction | null>(null)
 
   const clients = (persons.data ?? []).filter((p) => p.isClient)
   const professors = (persons.data ?? []).filter((p) => p.isProfessor)
@@ -87,8 +237,27 @@ export function Transacciones() {
     await api.transactions.checkout(id)
     reload()
   }
+  /** Terminar una clase en curso: detiene el contador y muestra el precio a pagar. */
+  async function terminar(t: Transaction) {
+    try {
+      const done = await api.transactions.checkout(t.id)
+      setFinished(done)
+      reload()
+    } catch (e: any) {
+      alert(e?.message ?? String(e))
+    }
+  }
+  /** Cambiar la hora de inicio de una clase en curso (el contador se recalcula). */
+  async function editarInicio(t: Transaction, startMin: number | null) {
+    const base: any = { ...t, serviceSel: t.isClass ? CLASS : t.serviceId == null ? '' : String(t.serviceId) }
+    await api.transactions.update(t.id, toInput({ ...base, startMin }))
+    reload()
+  }
 
   const nameOf = (id: number | null) => persons.data?.find((p) => p.id === id)?.fullName ?? '—'
+  const svcName = (t: Transaction) =>
+    (services.data ?? []).find((s) => s.id === (t.resolvedServiceId ?? t.serviceId))?.name ?? (t.isClass ? 'Clase de curso' : t.serviceRaw ?? 'Servicio')
+  const openSessions = (data ?? []).filter((t) => t.isOpen)
 
   const columns: GridColumn[] = [
     { key: 'txDate', label: 'Fecha', type: 'date', width: 140 },
@@ -116,13 +285,23 @@ export function Transacciones() {
         <div className="toolbar" style={{ margin: 0 }}>
           <button className={`btn ${grouped ? '' : 'primary'} sm`} onClick={() => setGrouped(false)}>Cuadrícula</button>
           <button className={`btn ${grouped ? 'primary' : ''} sm`} onClick={() => setGrouped(true)}>Agrupar por cliente</button>
+          <button className="btn primary" onClick={() => setAddingClass(true)}>＋ Añadir clase</button>
         </div>
       </div>
       <p className="muted" style={{ margin: '-6px 0 14px' }}>
-        Escribe la fila como en Excel. <strong>Entrada</strong> = hora de inicio (queda abierta, sin precio).
-        <strong> Salida</strong> = escribe la hora de fin o pulsa “Salida ahora”: el precio se calcula por los
-        minutos y se carga a la cuenta del cliente.
+        «＋ Añadir clase» pone el contador en marcha; «⏹ Terminar» lo detiene y muestra el precio a pagar.
+        Las horas de inicio y fin se pueden modificar en cualquier momento (en la tarjeta o en la cuadrícula).
       </p>
+
+      {!busy && (
+        <ClasesEnCurso
+          open={openSessions}
+          nameOf={nameOf}
+          svcName={svcName}
+          onEditStart={editarInicio}
+          onTerminar={terminar}
+        />
+      )}
 
       {busy ? (
         <div className="panel"><div style={{ padding: 24 }}><Spinner /></div></div>
@@ -141,10 +320,51 @@ export function Transacciones() {
           addLabel="Registrar"
           rowActions={(r) =>
             r.isOpen ? (
-              <button className="btn primary sm" onClick={() => salida(r.id)} title="Registrar salida (hora actual)">Salida ahora</button>
+              <button className="btn primary sm" onClick={() => terminar(r)} title="Terminar (hora actual) y calcular el precio">⏹ Terminar</button>
             ) : null
           }
         />
+      )}
+
+      {/* Alta de clase con contador */}
+      {addingClass && (
+        <NuevaClaseModal
+          clients={clients.map((c) => ({ id: c.id, label: c.fullName }))}
+          professors={professors.map((p) => ({ id: p.id, label: p.nickname || p.fullName }))}
+          serviceOpts={serviceOpts}
+          onClose={() => setAddingClass(false)}
+          onStarted={() => { setAddingClass(false); reload() }}
+        />
+      )}
+
+      {/* Resumen al terminar: contador detenido + precio a pagar */}
+      {finished && (
+        <Modal
+          title="✅ Clase terminada"
+          onClose={() => setFinished(null)}
+          footer={<button className="btn primary" onClick={() => setFinished(null)}>Listo</button>}
+        >
+          <div style={{ textAlign: 'center', padding: '6px 0 2px' }}>
+            <div style={{ fontSize: 16, fontWeight: 700 }}>{nameOf(finished.clientId)}</div>
+            <div className="muted" style={{ marginTop: 2 }}>{svcName(finished)}</div>
+            <div className="grid" style={{ gridTemplateColumns: '1fr 1fr', gap: 10, marginTop: 16 }}>
+              <div className="panel stat">
+                <div className="label">Duración</div>
+                <div className="value">{finished.durationMin != null ? fmtDur(finished.durationMin) : '—'}</div>
+              </div>
+              <div className="panel stat">
+                <div className="label">Precio a pagar</div>
+                <div className="value" style={{ color: 'var(--brand-strong)' }}>{formatCOP(finished.priceEffective)}</div>
+              </div>
+            </div>
+            <div className="muted" style={{ fontSize: 12, marginTop: 12 }}>
+              {finished.startMin != null && finished.endMin != null
+                ? `${minutesToHHMM(finished.startMin)} – ${minutesToHHMM(finished.endMin)} · `
+                : ''}
+              El importe quedó cargado a la cuenta del cliente. Puedes ajustar las horas en la cuadrícula si hace falta.
+            </div>
+          </div>
+        </Modal>
       )}
     </div>
   )
@@ -188,7 +408,7 @@ function GroupedView({ data, persons, services, onSalida }: { data: Transaction[
                   {txs.map((t) => (
                     <tr key={t.id} className={t.isOpen ? 'row-open' : undefined}>
                       <td>{t.txDate}</td>
-                      <td>{t.txType === 'loan' ? <span className="badge loan">Préstamo</span> : t.isClass ? <span className="badge class">Clase</span> : ''} {svcOf(t.resolvedServiceId ?? t.serviceId) ?? t.serviceRaw ?? '—'}</td>
+                      <td>{t.txType === 'loan' ? <span className="badge loan">Alquiler</span> : t.isClass ? <span className="badge class">Clase</span> : ''} {svcOf(t.resolvedServiceId ?? t.serviceId) ?? t.serviceRaw ?? '—'}</td>
                       <td>{t.startMin != null ? minutesToHHMM(t.startMin) : '—'}{t.endMin != null ? `–${minutesToHHMM(t.endMin)}` : ''}</td>
                       <td className="num">{t.isOpen ? <span className="badge open">Abierta</span> : formatCOP(t.priceEffective)}</td>
                       <td>{t.isOpen && <button className="btn primary sm" onClick={() => onSalida(t.id)}>Salida ahora</button>}</td>

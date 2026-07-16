@@ -1045,7 +1045,7 @@ export const supabaseApi: AppApi = {
     list: async (filter) => {
       const rows = await sb.select<any>('persons', {
         filters: personFilters(filter),
-        order: 'full_name.asc',
+        order: 'id.desc', // último registro primero (paridad con el escritorio)
         limit: filter?.limit,
         offset: filter?.limit ? filter?.offset || 0 : undefined
       })

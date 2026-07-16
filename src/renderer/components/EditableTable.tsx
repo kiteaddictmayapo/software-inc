@@ -58,7 +58,16 @@ function displayValue(col: GridColumn, row: any): React.ReactNode {
  * un guardado por tecla). En la fila NUEVA (`live`) confirma en cada cambio, para que
  * el borrador esté siempre completo al pulsar "Agregar" (sin carreras blur/click).
  */
-function EditCell({ col, value, onCommit, live }: { col: GridColumn; value: any; onCommit: (v: any) => void; live?: boolean }) {
+function EditCell({ col, value, onCommit, live, autoFocus, onDone }: {
+  col: GridColumn
+  value: any
+  onCommit: (v: any) => void
+  live?: boolean
+  /** Celda activada con clic (modo perezoso): enfoca el input al montarse. */
+  autoFocus?: boolean
+  /** Avisar que la edición terminó (la celda vuelve a modo lectura). */
+  onDone?: () => void
+}) {
   const [local, setLocal] = useState<string>(value == null ? '' : String(col.type === 'time' ? minutesToHHMM(value) : value))
   React.useEffect(() => {
     setLocal(value == null ? '' : String(col.type === 'time' ? minutesToHHMM(value) : value))
@@ -68,7 +77,11 @@ function EditCell({ col, value, onCommit, live }: { col: GridColumn; value: any;
 
   if (col.type === 'select') {
     return (
-      <select className="cell-input" value={value ?? ''} onChange={(e) => onCommit(e.target.value === '' ? null : coerce(col, e.target.value))}>
+      <select
+        className="cell-input" autoFocus={autoFocus} value={value ?? ''}
+        onChange={(e) => { onCommit(e.target.value === '' ? null : coerce(col, e.target.value)); onDone?.() }}
+        onBlur={() => onDone?.()}
+      >
         {col.options?.map((o) => (
           <option key={String(o.value)} value={o.value as any}>{o.label}</option>
         ))}
@@ -79,18 +92,26 @@ function EditCell({ col, value, onCommit, live }: { col: GridColumn; value: any;
     return <input className="cell-check" type="checkbox" checked={!!value} onChange={(e) => onCommit(e.target.checked)} />
   }
   if (col.type === 'date') {
-    return <input className="cell-input" type="date" value={value ?? ''} onChange={(e) => onCommit(e.target.value || null)} />
+    return (
+      <input
+        className="cell-input" type="date" autoFocus={autoFocus} value={value ?? ''}
+        onChange={(e) => onCommit(e.target.value || null)}
+        onBlur={() => onDone?.()}
+      />
+    )
   }
   if (col.type === 'time') {
     return (
       <input
-        className="cell-input" type="time" value={local}
+        className="cell-input" type="time" autoFocus={autoFocus} value={local}
         onChange={(e) => { setLocal(e.target.value); if (live) onCommit(e.target.value ? hhmmToMinutes(e.target.value) : null) }}
         onBlur={() => {
-          if (live) return
-          const m = local ? hhmmToMinutes(local) : null
-          setLocal(m == null ? '' : minutesToHHMM(m)) // re-normaliza lo mostrado
-          onCommit(m)
+          if (!live) {
+            const m = local ? hhmmToMinutes(local) : null
+            setLocal(m == null ? '' : minutesToHHMM(m)) // re-normaliza lo mostrado
+            onCommit(m)
+          }
+          onDone?.()
         }}
         onKeyDown={(e) => { if (e.key === 'Enter') (e.target as HTMLInputElement).blur() }}
       />
@@ -99,14 +120,16 @@ function EditCell({ col, value, onCommit, live }: { col: GridColumn; value: any;
   const numeric = col.type === 'number' || col.type === 'money'
   return (
     <input
-      className="cell-input" type={numeric ? 'number' : 'text'} value={local}
+      className="cell-input" type={numeric ? 'number' : 'text'} autoFocus={autoFocus} value={local}
       placeholder={col.placeholder} style={{ textAlign: align }}
       onChange={(e) => { setLocal(e.target.value); if (live) onCommit(coerce(col, e.target.value)) }}
       onBlur={() => {
-        if (live) return
-        const v = coerce(col, local)
-        setLocal(v == null ? '' : String(v)) // re-normaliza aunque el commit sea no-op
-        onCommit(v)
+        if (!live) {
+          const v = coerce(col, local)
+          setLocal(v == null ? '' : String(v)) // re-normaliza aunque el commit sea no-op
+          onCommit(v)
+        }
+        onDone?.()
       }}
       onKeyDown={(e) => { if (e.key === 'Enter') (e.target as HTMLInputElement).blur() }}
     />
@@ -131,6 +154,10 @@ export function EditableTable(props: EditableTableProps) {
   const getId = props.getRowId ?? ((r: any) => r.id)
   const [draft, setDraft] = useState<Record<string, any>>({ ...(props.newRowDefaults ?? {}) })
   const [busy, setBusy] = useState(false)
+  // Celda activa (rendimiento): el input/select solo se monta en la celda que se está
+  // editando. Con cientos de filas × selects de cientos de opciones, montar todos los
+  // inputs a la vez creaba ~500k nodos DOM y la cuadrícula tardaba en cargar.
+  const [active, setActive] = useState<{ id: any; key: string } | null>(null)
   const hasActions = !!(onDelete || rowActions || onCreate)
 
   const setDraftVal = (k: string, v: any) => setDraft((d) => ({ ...d, [k]: v }))
@@ -171,15 +198,41 @@ export function EditableTable(props: EditableTableProps) {
         <tbody>
           {rows.map((row) => (
             <tr key={getId(row)} className={props.rowClassName?.(row)}>
-              {columns.map((c) => (
-                <td key={c.key} className={`sheet-cell type-${c.type ?? 'text'}`} style={{ textAlign: c.align }}>
-                  {isEditable(c) && onUpdate ? (
-                    <EditCell col={c} value={c.get ? c.get(row) : row[c.key]} onCommit={(v) => commitCell(row, c, v)} />
-                  ) : (
-                    displayValue(c, row)
-                  )}
-                </td>
-              ))}
+              {columns.map((c) => {
+                const editable = isEditable(c) && !!onUpdate
+                // Los toggles son baratos (1 checkbox) y deben responder al primer clic.
+                if (editable && c.type === 'toggle') {
+                  return (
+                    <td key={c.key} className="sheet-cell type-toggle" style={{ textAlign: c.align }}>
+                      <EditCell col={c} value={c.get ? c.get(row) : row[c.key]} onCommit={(v) => commitCell(row, c, v)} />
+                    </td>
+                  )
+                }
+                const isActive = editable && active?.id === getId(row) && active?.key === c.key
+                return (
+                  <td key={c.key} className={`sheet-cell type-${c.type ?? 'text'}`} style={{ textAlign: c.align }}>
+                    {isActive ? (
+                      <EditCell
+                        col={c}
+                        value={c.get ? c.get(row) : row[c.key]}
+                        autoFocus
+                        onDone={() => setActive(null)}
+                        onCommit={(v) => commitCell(row, c, v)}
+                      />
+                    ) : (
+                      <div
+                        className={editable ? 'cell-view clickable' : 'cell-view'}
+                        tabIndex={editable ? 0 : undefined}
+                        onClick={editable ? () => setActive({ id: getId(row), key: c.key }) : undefined}
+                        onFocus={editable ? () => setActive({ id: getId(row), key: c.key }) : undefined}
+                        title={editable ? 'Clic para editar' : undefined}
+                      >
+                        {displayValue(c, row)}
+                      </div>
+                    )}
+                  </td>
+                )
+              })}
               {hasActions && (
                 <td className="sheet-actions">
                   {rowActions?.(row)}

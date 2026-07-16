@@ -52,7 +52,7 @@ export function list(filter: PersonFilter = {}): Person[] {
   const sql =
     'SELECT * FROM persons' +
     (where.length ? ' WHERE ' + where.join(' AND ') : '') +
-    ' ORDER BY full_name COLLATE NOCASE' +
+    ' ORDER BY id DESC' + // último registro primero (los recién creados salen arriba)
     (filter.limit ? ` LIMIT ${Number(filter.limit)} OFFSET ${Number(filter.offset || 0)}` : '')
   return getDb().prepare(sql).all(params).map(mapRow)
 }

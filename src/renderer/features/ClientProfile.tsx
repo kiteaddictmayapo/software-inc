@@ -93,7 +93,7 @@ export function ClientProfile({ personId, onClose }: { personId: number; onClose
                 {rows.map((t) => (
                   <tr key={t.id} className={t.isOpen ? 'row-open' : undefined}>
                     <td>{t.txDate}</td>
-                    <td>{t.txType === 'loan' ? <span className="badge loan">Préstamo</span> : t.isClass ? <span className="badge class">Clase</span> : ''} {t.serviceRaw ?? '—'}</td>
+                    <td>{t.txType === 'loan' ? <span className="badge loan">Alquiler</span> : t.isClass ? <span className="badge class">Clase</span> : ''} {t.serviceRaw ?? '—'}</td>
                     <td>{t.startMin != null ? minutesToHHMM(t.startMin) : '—'}{t.endMin != null ? `–${minutesToHHMM(t.endMin)}` : ''}</td>
                     <td className="num">{t.isOpen ? <span className="badge open">Abierta</span> : formatCOP(t.priceEffective)}</td>
                   </tr>

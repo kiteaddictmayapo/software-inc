@@ -92,6 +92,10 @@ table.sheet tr:hover .sheet-cell { background: #faf4f5; }
   border-radius: 0; min-width: 60px;
 }
 .cell-input:focus { outline: 2px solid rgba(248,0,64,.45); outline-offset: -2px; background: #fff; border-radius: 4px; }
+/* Celda en modo lectura (perezosa): el input solo se monta al hacer clic */
+.cell-view { padding: 8px 10px; min-height: 36px; display: flex; align-items: center; }
+.type-money .cell-view, .type-number .cell-view { justify-content: flex-end; }
+.cell-view:focus { outline: 2px solid rgba(248,0,64,.35); outline-offset: -2px; border-radius: 4px; }
 select.cell-input { cursor: pointer; -webkit-appearance: none; appearance: none; padding-right: 8px; }
 select.cell-input option { background: #fff; color: var(--ink); }
 .cell-check { width: auto; margin: 8px 10px; accent-color: var(--brand); cursor: pointer; }

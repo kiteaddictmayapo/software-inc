@@ -110,7 +110,8 @@ export const mockApi: AppApi = {
         const q = filter.search.toLowerCase()
         r = r.filter((p) => p.fullName.toLowerCase().includes(q) || (p.email ?? '').toLowerCase().includes(q))
       }
-      return r.map((p) => ({ ...p }))
+      // último registro primero (paridad con escritorio y web)
+      return r.map((p) => ({ ...p })).sort((a, b) => b.id - a.id)
     },
     count: async (filter) => (await mockApi.persons.list(filter)).length,
     get: async (id) => persons.find((p) => p.id === id) ?? null,
