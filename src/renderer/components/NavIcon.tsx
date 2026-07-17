@@ -1,7 +1,7 @@
 import React from 'react'
 
 export type NavIconName =
-  | 'dashboard' | 'users' | 'tag' | 'kite' | 'calendar' | 'cocktail' | 'banknote'
+  | 'dashboard' | 'users' | 'tag' | 'kite' | 'calendar' | 'wind' | 'cocktail' | 'banknote'
   | 'globe' | 'receipt' | 'wallet' | 'chart' | 'card' | 'gear' | 'folder'
 
 /* Trazos estilo Lucide/Feather: 24×24, stroke currentColor (heredan el color del enlace). */
@@ -40,6 +40,13 @@ const PATHS: Record<NavIconName, React.ReactNode> = {
       <path d="M16 2v4" />
       <rect x="3" y="4" width="18" height="18" rx="2" />
       <path d="M3 10h18" />
+    </>
+  ),
+  wind: (
+    <>
+      <path d="M12.8 19.6A2 2 0 1 0 14 16H2" />
+      <path d="M17.5 8a2.5 2.5 0 1 1 2 4H2" />
+      <path d="M9.8 4.4A2 2 0 1 1 11 8H2" />
     </>
   ),
   cocktail: (

@@ -11,6 +11,7 @@ import { Personas } from './features/Personas'
 import { Catalogo } from './features/Catalogo'
 import { Transacciones } from './features/Transacciones'
 import { Calendario } from './features/Calendario'
+import { Viento } from './features/Viento'
 import { Bar } from './features/Bar'
 import { Gastos } from './features/Gastos'
 import { Facturacion } from './features/Facturacion'
@@ -30,6 +31,7 @@ const NAV: { to: string; label: string; icon: NavIconName; end?: boolean }[] = [
   { to: '/catalogo', label: 'Catálogo', icon: 'tag' },
   { to: '/transacciones', label: 'Club', icon: 'kite' },
   { to: '/calendario', label: 'Calendario', icon: 'calendar' },
+  { to: '/viento', label: 'Viento', icon: 'wind' },
   { to: '/bar', label: 'Bar', icon: 'cocktail' },
   { to: '/gastos', label: 'Gastos', icon: 'banknote' },
   { to: '/reservas-web', label: 'Reservas Web', icon: 'globe' },
@@ -119,6 +121,7 @@ export default function App() {
           <Route path="/catalogo" element={<Catalogo />} />
           <Route path="/transacciones" element={<Transacciones />} />
           <Route path="/calendario" element={<Calendario />} />
+          <Route path="/viento" element={<Viento />} />
           <Route path="/bar" element={<Bar />} />
           <Route path="/gastos" element={<Gastos />} />
           <Route path="/reservas-web" element={<ReservasWeb />} />

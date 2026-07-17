@@ -232,6 +232,14 @@ input[type="date"], input[type="time"] { color-scheme: light; }
 .cal-dots .dot.open { background: var(--accent); }
 .cal-count { font-size: 10px; color: var(--muted); font-weight: 700; }
 
+/* Viento: franja de datos en vivo + mapa de Windy embebido */
+.viento-now { display: flex; gap: 32px; flex-wrap: wrap; align-items: center; }
+.viento-num { font-size: 24px; font-weight: 700; }
+.viento-num small { font-size: 12px; font-weight: 500; color: var(--muted); }
+.viento-flecha { display: inline-block; font-size: 20px; line-height: 1; vertical-align: -2px; }
+.viento-mapa { margin-top: 16px; border: 1px solid var(--line); border-radius: var(--radius); box-shadow: var(--shadow); overflow: hidden; }
+.viento-mapa iframe { display: block; width: 100%; height: calc(100vh - 310px); min-height: 420px; border: 0; }
+
 /* ============================================================
    Móvil: misma app, fácil para teléfono. El escritorio no cambia.
    ============================================================ */
@@ -240,6 +248,8 @@ input[type="date"], input[type="time"] { color-scheme: light; }
 @media (max-width: 820px) {
   /* Layout: una columna con barra superior negra */
   .app { display: block; height: auto; min-height: 100%; }
+  .viento-now { gap: 18px; }
+  .viento-mapa iframe { height: 60vh; min-height: 320px; }
   .topbar {
     position: sticky; top: 0; z-index: 40;
     display: flex; align-items: center; justify-content: space-between;
